@@ -22,6 +22,13 @@ func snippetView(w http.ResponseWriter, r *http.Request) {
 }
 
 func snippetCreate(w http.ResponseWriter, r *http.Request) {
+	// It’s only possible to call w.WriteHeader() once per response, and after the status code has been written it can’t be changed.
+	// If we don’t call w.WriteHeader() explicitly, then the first call to w.Write() will automatically send a 200 OK status code to the user.
+	if r.Method != "POST" {
+		w.WriteHeader(405)
+		w.Write([]byte("Method Not Allowed"))
+		return
+	}
 	w.Write([]byte("Creating..."))
 }
 
@@ -38,41 +45,38 @@ func main() {
 }
 
 /*
-Go’s servemux supports two different types of URL patterns:
-	- fixed paths and
-	- subtree paths.
+HTTP
+====
+- It’s the language (or set of rules) that web browsers and web servers use to communicate with each other.
+- Every HTTP message has two sides
+	- HTTP Request (from client → server) - What the client asks for
+	- HTTP Response (from server → client) - What the server sends back
 
-fixed path
-----------
-- Fixed paths don’t end with a trailing slash
-- fixed path patterns like these are only matched (and the corresponding handler called)
-  when the request URL path exactly matches the fixed path.
-- "/snippet/view" and "/snippet/create"
+Each of HTTP request and HTTP response messages has two main parts:
+	- Headers → metadata (information about the request or response)
+		- Each header is a key-value pair.
+		- Headers tell the server important details about the request.
+	- Body → the actual content (like HTML, JSON, image, etc.)
 
-subtree paths
--------------
-- Subtree path patterns are matched (and the corresponding handler called)
-whenever the start of a request URL path matches the subtree path.
-- "/" and "/static/"
-- subtree paths as acting a bit like they have a wildcard at the end, like "/**" or "/static/**".
+ResponseWriter
+==============
+- The Client (browser) Sends an HTTP Request
+- The Go HTTP server parses that raw request and automatically builds two objects
+	- w → a ResponseWriter
+	- r → a Request
+- then it calls the handler - snippetView(w, r)
+- handler function — it’s called by Go’s HTTP server whenever a request matches a route
+- w http.ResponseWriter — The “Output Pipe”
+	- w is an interface provided by Go’s HTTP package.
+	- It represents the connection back to the client.
+	- we don’t “return” anything from the handler function
+	- instead, we write data into the ResponseWriter (w), which represents a network connection to the client.
 
-Servemux features and quirks
-============================
-- In Go’s servemux, longer URL patterns always take precedence over shorter ones.
-- So, if a servemux contains multiple patterns which match a request, it will always dispatch the
-  request to the handler corresponding to the longest pattern.
-
-- Request URL paths are automatically sanitized. If the request path contains any . or ..
-elements or repeated slashes, the user will automatically be redirected to an equivalent clean URL.
-
-- If a subtree path has been registered and a request is received for that subtree path
-without a trailing slash, then the user will automatically be sent a
-301 Permanent Redirect to the subtree path with the slash added. For example, if you
-have registered the subtree path /foo/, then any request to /foo will be redirected to
-/foo/.
-
-
--> It’s possible to include host names in your URL patterns. This can be useful when you want
-to redirect all HTTP requests to a canonical URL, or if your application is acting as the back
-end for multiple sites or services.
+“When does Go actually send that data back to the client?”
+	- w.Write([]byte("Viewing..."))
+	- Go buffers your data (it doesn’t necessarily flush immediately).
+		=> A buffer is a small piece of memory used to store data temporarily before sending it somewhere — like a network, disk, or printer.
+		=> Flush means: “Send whatever is currently in the buffer right now.”
+	- writes the body bytes into an internal buffer connected to the client.
+	- The response is fully sent right after the handler function ends — unless Go already flushed data earlier (e.g., if the buffer filled up).
 */

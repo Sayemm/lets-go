@@ -22,13 +22,36 @@ func snippetView(w http.ResponseWriter, r *http.Request) {
 }
 
 func snippetCreate(w http.ResponseWriter, r *http.Request) {
-	// It’s only possible to call w.WriteHeader() once per response, and after the status code has been written it can’t be changed.
-	// If we don’t call w.WriteHeader() explicitly, then the first call to w.Write() will automatically send a 200 OK status code to the user.
-	if r.Method != "POST" {
-		w.WriteHeader(405)
-		w.Write([]byte("Method Not Allowed"))
+	if r.Method != http.MethodPost { // net/http constants
+		w.Header().Set("Allow", "POST")
+
+		// calls the w.WriteHeader() and w.Write() methods behind the scenes
+		// http.Error(w, "Method Not Allowed", 405)
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+
+	// Set a new cache-control header. If an existing "Cache-Control" header exists
+	// it will be overwritten.
+	w.Header().Set("Cache-Control", "public, max-age=31536000")
+
+	// In contrast, the Add() method appends a new "Cache-Control" header and can
+	// be called multiple times.
+	w.Header().Add("Cache-Control", "public")
+	w.Header().Add("Cache-Control", "max-age=3111111")
+
+	// Retrieve the first value for the "Cache-Control" header.
+	ans := w.Header().Get("Cache-Control")
+	fmt.Println("====>", ans)
+
+	// Retrieve a slice of all values for the "Cache-Control" header.
+	ansArr := w.Header().Values("Cache-Control")
+	fmt.Println("====>", ansArr)
+
+	// Delete all values for the "Cache-Control" header.
+	w.Header().Del("Cache-Control")
+
 	w.Write([]byte("Creating..."))
 }
 
@@ -45,38 +68,29 @@ func main() {
 }
 
 /*
-HTTP
-====
-- It’s the language (or set of rules) that web browsers and web servers use to communicate with each other.
-- Every HTTP message has two sides
-	- HTTP Request (from client → server) - What the client asks for
-	- HTTP Response (from server → client) - What the server sends back
+When sending a response Go will automatically set three system-generated headers
+	- Date
+	- Content-Length
+	- Content-Type.
+		- Go will attempt to set the correct one for you by content sniffing the response body with the http.DetectContentType() function.
+		- If this function can’t guess the content type, Go will fall back to setting the header Content-Type: application/octet-stream instead.
+		- it can’t distinguish JSON from plain text.
+		- So, by default, JSON responses will be sent with a Content-Type: text/plain; charset=utf-8 header.
 
-Each of HTTP request and HTTP response messages has two main parts:
-	- Headers → metadata (information about the request or response)
-		- Each header is a key-value pair.
-		- Headers tell the server important details about the request.
-	- Body → the actual content (like HTML, JSON, image, etc.)
 
-ResponseWriter
-==============
-- The Client (browser) Sends an HTTP Request
-- The Go HTTP server parses that raw request and automatically builds two objects
-	- w → a ResponseWriter
-	- r → a Request
-- then it calls the handler - snippetView(w, r)
-- handler function — it’s called by Go’s HTTP server whenever a request matches a route
-- w http.ResponseWriter — The “Output Pipe”
-	- w is an interface provided by Go’s HTTP package.
-	- It represents the connection back to the client.
-	- we don’t “return” anything from the handler function
-	- instead, we write data into the ResponseWriter (w), which represents a network connection to the client.
+=> The Header() map (which you access through w.Header()) exists on the server side before the response is sent.
+=> what does w.Header().Get("Cache-Control") do?
+---It reads a header value from the response header map — on the server side, before the response has been written to the client.
 
-“When does Go actually send that data back to the client?”
-	- w.Write([]byte("Viewing..."))
-	- Go buffers your data (it doesn’t necessarily flush immediately).
-		=> A buffer is a small piece of memory used to store data temporarily before sending it somewhere — like a network, disk, or printer.
-		=> Flush means: “Send whatever is currently in the buffer right now.”
-	- writes the body bytes into an internal buffer connected to the client.
-	- The response is fully sent right after the handler function ends — unless Go already flushed data earlier (e.g., if the buffer filled up).
+
+=> The word canonicalization means - Converting data into a standard, consistent form.
+   - When you’re using the Set(), Add(), Del(), Get() and Values() methods on the header map, the header name will always be canonicalized using the textproto.CanonicalMIMEHeaderKey() function.
+   - This converts the first letter and any letter following a hyphen to upper case, and the rest of the letters to lowercase.
+   - This has the practical implication that when calling these methods the header name is case-insensitive.
+
+
+=> The Del() method doesn’t remove system-generated headers. To suppress these, you need
+to access the underlying header map directly and set the value to nil. If you want to
+suppress the Date header, for example, you need to write:
+	-> w.Header()["Date"] = nil
 */

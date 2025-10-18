@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 )
 
 func home(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +19,14 @@ func home(w http.ResponseWriter, r *http.Request) {
 }
 
 func snippetView(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Viewing..."))
+	id, err := strconv.Atoi(r.URL.Query().Get("id"))
+
+	if err != nil || id < 1 {
+		fmt.Println("hELLO")
+		http.NotFound(w, r)
+		return
+	}
+	fmt.Fprintf(w, "ID = %d", id)
 }
 
 func snippetCreate(w http.ResponseWriter, r *http.Request) {
@@ -68,29 +76,8 @@ func main() {
 }
 
 /*
-When sending a response Go will automatically set three system-generated headers
-	- Date
-	- Content-Length
-	- Content-Type.
-		- Go will attempt to set the correct one for you by content sniffing the response body with the http.DetectContentType() function.
-		- If this function can’t guess the content type, Go will fall back to setting the header Content-Type: application/octet-stream instead.
-		- it can’t distinguish JSON from plain text.
-		- So, by default, JSON responses will be sent with a Content-Type: text/plain; charset=utf-8 header.
-
-
-=> The Header() map (which you access through w.Header()) exists on the server side before the response is sent.
-=> what does w.Header().Get("Cache-Control") do?
----It reads a header value from the response header map — on the server side, before the response has been written to the client.
-
-
-=> The word canonicalization means - Converting data into a standard, consistent form.
-   - When you’re using the Set(), Add(), Del(), Get() and Values() methods on the header map, the header name will always be canonicalized using the textproto.CanonicalMIMEHeaderKey() function.
-   - This converts the first letter and any letter following a hyphen to upper case, and the rest of the letters to lowercase.
-   - This has the practical implication that when calling these methods the header name is case-insensitive.
-
-
-=> The Del() method doesn’t remove system-generated headers. To suppress these, you need
-to access the underlying header map directly and set the value to nil. If you want to
-suppress the Date header, for example, you need to write:
-	-> w.Header()["Date"] = nil
+- fmt.Fprintf() function you’ll notice that it takes an io.Writer as the first parameter…
+- but we passed it our http.ResponseWriter object instead — and it worked fine.
+*** We’re able to do this because the io.Writer type is an interface, and the
+    http.ResponseWriter object satisfies the interface because it has a w.Write() method.
 */
